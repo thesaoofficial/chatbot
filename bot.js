@@ -1,76 +1,66 @@
-const Discord = require('discord.js');
-const client = new Discord.Client({
+const { Client, Intents } = require('discord.js');
+const axios = require('axios');
+
+const client = new Client({
   intents: [
-    Discord.Intents.FLAGS.GUILDS,
-    Discord.Intents.FLAGS.GUILD_MESSAGES,
-    Discord.Intents.FLAGS.GUILD_BANS
+    Intents.FLAGS.GUILDS,
+    Intents.FLAGS.GUILD_MESSAGES
   ]
 });
-const config = require('./config.json');
 
-// Uyarıları saklamak için bir nesne oluşturun
-const uyarilar = {};
+const OPENAI_API_KEY = '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'; // OpenAI GPT-3 API anahtarınızı ekleyin
+const TARGET_CHANNEL_ID = '1178053254274367539'; // Göndermek istediğiniz kanalın ID'sini ekleyin
 
-const kufurKelimeler = [
-  'ananı sikiyim', 
-  'orospu çocuğu', 
-  'piç', 
-  'fallik', 
-  'amına koyim', 
-  'sikik', 
-  'yarrak', 
-  'amına korum',
-  'sikerim belanı',
-  'götünü sikiyim',
-  'yavşak',
-  'götünü sikiyim',
-  'ananı yurdunu sikiyim',
-  'senin sülaleni sikiyim',
-  'bacını sikiyim',
-  'kalıbını siktiğim' // Buraya virgül eklendi
-];
-
-client.on('ready', () => {
-  console.log(`Bot ${client.user.tag} olarak giriş yaptı.`);
+client.once('ready', () => {
+  console.log(`Bot ${client.user.tag} is online!`);
 });
 
-client.on('messageCreate', (message) => {
-  // Mesajın bot tarafından gönderilmiş olup olmadığını kontrol et
+client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
-  // Mesajın içeriğini kontrol et
-  const content = message.content.toLowerCase();
+  const userMessage = message.content;
 
-  // Küfür kontrolü
-  if (kufurKelimeler.some(kelime => content.includes(kelime))) {
-    uyariver(message);
+  try {
+    const botResponse = await generateGPTResponse(userMessage);
+
+    // Belirli bir kanala mesaj gönderme
+    const targetChannel = message.guild.channels.cache.get(TARGET_CHANNEL_ID);
+
+    if (targetChannel) {
+      targetChannel.send(botResponse);
+    } else {
+      console.error('Hedef kanal bulunamadı!');
+    }
+  } catch (error) {
+    console.error('Kullanıcı mesajını işlerken hata:', error.message);
   }
-
-  // ... Diğer komutlar ...
-
 });
 
-// ... Diğer olay dinleyicileri ...
+async function generateGPTResponse(input) {
+  const gptEndpoint = 'https://api.openai.com/v1/engines/davinci/completions';
 
-function uyariver(message) {
-  const user = message.author;
-  uyarilar[user.id] = (uyarilar[user.id] || 0) + 1;
+  try {
+    const response = await axios.post(
+      gptEndpoint,
+      {
+        prompt: input,
+        max_tokens: 150,
+        temperature: 0.7
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`
+        }
+      }
+    );
 
-  // Kullanıcıya uyarı verildiğini belirt
-  message.channel.send(`${user.username}'a bir uyarı verildi. Toplam uyarı sayısı: ${uyarilar[user.id]}`);
-
-  // 4. uyarıyı kontrol et ve sunucudan yasakla
-  if (uyarilar[user.id] === 4) {
-    const guild = message.guild;
-    guild.members.ban(user.id, { reason: '4 uyarı alındı.' })
-      .then(() => {
-        console.log(`Kullanıcı ${user.username} sunucudan yasaklandı.`);
-      })
-      .catch((err) => {
-        console.error(`Kullanıcıyı yasaklama sırasında bir hata oluştu: ${err}`);
-      });
+    return response.data.choices[0].text.trim();
+  } catch (error) {
+    console.error('GPT tarafından cevap oluşturulurken hata:', error.message);
+    return 'Üzgünüm, bir hata oluştu.';
   }
 }
 
-// Botunuzun Discord'a giriş yapması için token'i girin
-client.login(config.token);
+const token = 'MTE3NTczMzYyMDEzMzA4MTA4OA.G-WpY4.-IjqCppuFkx9uCWg5k-KQQhFXGEOQT0RO4uAeU'; // Discord botunuzun token'ını ekleyin
+client.login(token);
